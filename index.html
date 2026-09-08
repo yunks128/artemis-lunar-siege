@@ -1358,8 +1358,8 @@ function applyLang(){
     return "<div class='wk'><div class='g'>"+w.g+"</div><div><div class='t'>"+t(w.n)+"</div><div class='d'>"+t(w.d)+"</div></div></div>";
   }).join("");
   $("foot").innerHTML = LANG==="en"
-    ? "ARTEMIS: LUNAR SIEGE · original work · MIT licensed · <a href='https://github.com/yunks128/artemis-lunar-siege' target='_blank' rel='noopener'>source</a>"
-    : "ARTEMIS: LUNAR SIEGE · 오리지널 작품 · MIT 라이선스 · <a href='https://github.com/yunks128/artemis-lunar-siege' target='_blank' rel='noopener'>소스</a>";
+    ? "ARTEMIS: LUNAR SIEGE · original work · MIT licensed"
+    : "ARTEMIS: LUNAR SIEGE · 오리지널 작품 · MIT 라이선스";
   document.querySelectorAll("#lang button").forEach(b=>b.classList.toggle("sel", b.dataset.l===LANG));
   if(MODE==="levelup") renderCards();
   if(MODE==="over") renderOver();
