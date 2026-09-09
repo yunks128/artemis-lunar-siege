@@ -283,7 +283,7 @@ function gainXP(v){
   const p=G.p; p.xp+=v; SFX.xp();
   while(p.xp>=p.need){
     p.xp-=p.need; p.lv++;
-    p.need = Math.round(8 + p.lv*4.2 + p.lv*p.lv*0.55);
+    p.need = Math.round(7 + p.lv*3.6 + p.lv*p.lv*0.45);
     G.pendingLv=(G.pendingLv||0)+1;
   }
   if(G.pendingLv && MODE==="play") openLevelUp();

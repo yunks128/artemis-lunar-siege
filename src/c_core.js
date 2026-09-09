@@ -20,8 +20,8 @@ for(let i=0;i<160;i++) STARS.push({x:Math.random(),y:Math.random(),s:rnd(.4,1.5)
 function newGame(){
   G={
     t:0, spawnT:0, kills:0, shake:0, flash:0,
-    base:{hp:100,max:100},
-    p:{x:0,y:170,vx:0,vy:0,r:13,hp:100,max:100,spd:172,lv:1,xp:0,need:8,
+    base:{hp:140,max:140},
+    p:{x:0,y:170,vx:0,vy:0,r:13,hp:130,max:130,spd:184,lv:1,xp:0,need:7,
        inv:0,face:-Math.PI/2,dmg:1,area:1,cd:1,mag:88,armor:0,regen:0,walk:0},
     weapons:{}, passives:{},
     E:[], B:[], EB:[], orbs:[], mines:[], fx:[], beams:[], shocks:[],
@@ -37,8 +37,8 @@ function addWeapon(id){ G.weapons[id]={lv:1,t:0,leg:false}; }
 function recalc(){
   const p=G.p, pa=G.passives;
   const L=k=>pa[k]||0;
-  p.spd = 172*(1+0.12*L("boots"));
-  p.max = 100 + 18*L("core");
+  p.spd = 184*(1+0.12*L("boots"));
+  p.max = 130 + 20*L("core");
   p.mag = 88*(1+0.32*L("mag"));
   p.cd  = Math.max(0.42, 1-0.09*L("cool"));
   p.dmg = 1+0.14*L("amp");
@@ -66,7 +66,7 @@ function wstat(id){
 }
 
 /* ---------------- spawning ---------------- */
-function scale(){ return 1 + G.t/70 + Math.pow(G.t/300,1.9); }
+function scale(){ return 1 + G.t/110 + Math.pow(G.t/380,1.7); }
 function spawnPos(){
   const a=Math.random()*TAU, d=Math.max(W,H)/ZOOM*0.62+rnd(60,220);
   return {x:clamp(G.p.x+Math.cos(a)*d,-WORLD,WORLD), y:clamp(G.p.y+Math.sin(a)*d,-WORLD,WORLD)};
@@ -76,13 +76,13 @@ function mkEnemy(type,pos,mult){
   const toBase = Math.random()<0.34;
   G.E.push({x:P.x,y:P.y,r:d.r,type:type,c:d.c,shape:d.shape,ranged:!!d.ranged,
     hp:d.hp*s, max:d.hp*s, spd:d.spd*(1+Math.min(.45,G.t/1400))*rnd(.9,1.1),
-    dmg:d.dmg*(1+G.t/600), xp:d.xp, kx:0,ky:0, hit:0, at:rnd(0,2), burn:0, a:rnd(0,TAU),
+    dmg:d.dmg*(1+G.t/900), xp:d.xp, kx:0,ky:0, hit:0, at:rnd(0,2), burn:0, a:rnd(0,TAU),
     target:toBase?"base":"player", boss:false});
 }
 function spawnWave(dt){
   if(G.boss && G.boss.kind==="monarch") { G.spawnT-=dt; if(G.spawnT<=0){G.spawnT=2.2; for(let i=0;i<4;i++) mkEnemy("skitter");} return; }
   G.spawnT -= dt;
-  const rate = clamp(1.15 - G.t/560, 0.10, 1.15);
+  const rate = clamp(1.15 - G.t/780, 0.20, 1.15);
   if(G.spawnT>0) return;
   G.spawnT = rate;
   const T=G.t, pool=["crawler"];
@@ -92,7 +92,7 @@ function spawnWave(dt){
   if(T>330) pool.push("spitter");
   if(T>420) pool.push("hulk","drifter");
   if(T>620) pool.push("hulk","spitter","drifter");
-  const n = 1 + Math.floor(T/150) + (Math.random()<0.3?1:0);
+  const n = 1 + Math.floor(T/210) + (Math.random()<0.3?1:0);
   for(let i=0;i<n;i++){ if(G.E.length<420) mkEnemy(pick(pool)); }
   // packs
   if(T>120 && Math.random()<0.16){
@@ -102,7 +102,7 @@ function spawnWave(dt){
 }
 function spawnBoss(kind){
   const P=spawnPos();
-  const hp = kind==="harvester" ? 2400*(1+G.t/900) : 11000;
+  const hp = kind==="harvester" ? 1800*(1+G.t/1200) : 8000;
   G.boss={kind:kind, x:P.x,y:P.y, r:kind==="harvester"?42:58,
     hp:hp, max:hp, spd:kind==="harvester"?52:44, hit:0, at:2, ct:4, dash:0, ang:0, phase:1,
     name:kind==="harvester"?"boss_harvester":"boss_monarch"};
@@ -140,7 +140,7 @@ function damageBoss(amt){
 }
 function hitPlayer(amt){
   const p=G.p; if(p.inv>0) return;
-  p.hp -= amt*(1-p.armor); p.inv=0.62; G.shake=Math.max(G.shake,7); G.flash=0.28; SFX.hurt();
+  p.hp -= amt*(1-p.armor); p.inv=0.85; G.shake=Math.max(G.shake,7); G.flash=0.28; SFX.hurt();
   const d=document.getElementById("dmgtoast"); d.classList.add("hit"); setTimeout(()=>d.classList.remove("hit"),160);
   if(p.hp<=0){ p.hp=0; finish("lose_p"); }
 }
