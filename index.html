@@ -552,6 +552,7 @@ function mkEnemy(type,pos,mult){
   G.E.push({x:P.x,y:P.y,r:d.r,type:type,c:d.c,shape:d.shape,ranged:!!d.ranged,
     hp:d.hp*s, max:d.hp*s, spd:d.spd*(1+Math.min(.45,G.t/1400))*rnd(.9,1.1),
     dmg:d.dmg*(1+G.t/900), xp:d.xp, kx:0,ky:0, hit:0, at:rnd(0,2), burn:0, a:rnd(0,TAU),
+    sd:rnd(0,TAU), walk:rnd(0,TAU), bob:rnd(0,TAU),
     target:toBase?"base":"player", boss:false});
 }
 function spawnWave(dt){
@@ -820,6 +821,7 @@ function update(dt){
         }
       }
     }
+    e.walk += dt*e.spd*0.075;
     e.x += (Math.cos(a)*e.spd + e.kx)*dt;
     e.y += (Math.sin(a)*e.spd + e.ky)*dt;
     e.kx*=Math.pow(0.001,dt); e.ky*=Math.pow(0.001,dt);
@@ -1239,51 +1241,179 @@ function drawDrones(){
   }
 }
 
+/* --- creature shading helpers --- */
+function hex2rgb(h){
+  if(h[0]==="#") return [parseInt(h.slice(1,3),16),parseInt(h.slice(3,5),16),parseInt(h.slice(5,7),16)];
+  const m=h.match(/-?\d+/g); return [+m[0],+m[1],+m[2]];   // also accepts shade()'s rgb(...) output
+}
+function shade(h,f){ const c=hex2rgb(h); const m=(v)=>Math.round(clamp(f<0?v*(1+f):v+(255-v)*f,0,255));
+  return "rgb("+m(c[0])+","+m(c[1])+","+m(c[2])+")"; }
+function tint(h,a){ const c=hex2rgb(h); return "rgba("+c[0]+","+c[1]+","+c[2]+","+a+")"; }
+/* body gradient: lit from upper-left, dark underside — reads as volume, not a flat decal */
+function bodyGrad(r,c){
+  const g=cx.createLinearGradient(-r*.6,-r*.9,r*.5,r);
+  g.addColorStop(0,shade(c,.42)); g.addColorStop(.45,c); g.addColorStop(1,shade(c,-.55));
+  return g;
+}
+function leg(x1,y1,x2,y2,x3,y3,w,col){
+  cx.strokeStyle=col; cx.lineCap="round"; cx.lineJoin="round"; cx.lineWidth=w;
+  cx.beginPath(); cx.moveTo(x1,y1); cx.lineTo(x2,y2); cx.lineTo(x3,y3); cx.stroke();
+}
+function eyes(n,y,sp,rr,col,glow){
+  cx.shadowColor=glow; cx.shadowBlur=8; cx.fillStyle=col;
+  for(let i=0;i<n;i++){ const x=(i-(n-1)/2)*sp;
+    cx.beginPath(); cx.ellipse(x,y,rr,rr*1.25,0,0,TAU); cx.fill(); }
+  cx.shadowBlur=0;
+}
+
 function drawEnemy(e){
-  const hit=e.hit>0;
+  const hit=e.hit>0, r=e.r, c=e.c, w=e.walk, hover=e.shape===2||e.shape===4;
+  // contact shadow — tighter and darker for walkers, wide and soft for hoverers
+  const lift = hover ? 4+Math.sin(G.t*1.6+e.bob)*2.5 : Math.abs(Math.sin(w))*1.6;
   cx.save(); cx.translate(e.x,e.y);
-  cx.fillStyle="rgba(0,0,0,.4)"; cx.beginPath(); cx.ellipse(0,e.r*.45,e.r*.9,e.r*.45,0,0,TAU); cx.fill();
+  cx.fillStyle="rgba(0,0,0,"+(hover?.28:.45)+")";
+  cx.beginPath(); cx.ellipse(0,r*.5+lift*.5,r*(hover?1.0:.85)*(1+lift*.02),r*.34,0,0,TAU); cx.fill();
+  cx.translate(0,-lift);
   cx.rotate(e.a+Math.PI/2);
-  const c = hit?"#ffffff":e.c;
-  if(e.burn>0 && !hit){ cx.shadowColor="#ff8c42"; cx.shadowBlur=12; }
-  cx.fillStyle=c;
-  const r=e.r;
+  if(e.burn>0 && !hit){ cx.shadowColor="#ff8c42"; cx.shadowBlur=14; }
+  const body = hit ? "#ffffff" : null;      // white-out on hit, else shaded
+  const fill = body || bodyGrad(r,c);
+  const dark = body || shade(c,-.5), lite = body || shade(c,.35);
+
   switch(e.shape){
-    case 0: // crawler — chevron
-      cx.beginPath(); cx.moveTo(0,-r*1.15); cx.lineTo(r,r*.6); cx.lineTo(0,r*.15); cx.lineTo(-r,r*.6);
-      cx.closePath(); cx.fill(); break;
-    case 1: // skitter — dart
-      cx.beginPath(); cx.moveTo(0,-r*1.5); cx.lineTo(r*.75,r*.9); cx.lineTo(-r*.75,r*.9);
-      cx.closePath(); cx.fill(); break;
-    case 2: // drifter — hex
-      cx.beginPath();
-      for(let i=0;i<6;i++){const a=i*TAU/6; const rr=r*(i%2?1:1.2);
-        i?cx.lineTo(Math.cos(a)*rr,Math.sin(a)*rr):cx.moveTo(Math.cos(a)*rr,Math.sin(a)*rr)}
-      cx.closePath(); cx.fill(); break;
-    case 3: // hulk — heavy block
-      cx.beginPath(); cx.roundRect(-r,-r,r*2,r*2,r*.35); cx.fill();
-      cx.fillStyle="rgba(0,0,0,.35)"; cx.beginPath(); cx.roundRect(-r*.45,-r*.5,r*.9,r,3); cx.fill(); break;
-    case 4: // spitter — orb + spikes
-      cx.beginPath(); cx.arc(0,0,r*.8,0,TAU); cx.fill();
-      cx.strokeStyle=c; cx.lineWidth=2;
-      for(let i=0;i<5;i++){const a=i*TAU/5+G.t;
-        cx.beginPath(); cx.moveTo(Math.cos(a)*r*.8,Math.sin(a)*r*.8);
-        cx.lineTo(Math.cos(a)*r*1.35,Math.sin(a)*r*1.35); cx.stroke();}
+    case 0: { // crawler — armored beetle, six legs, segmented carapace
+      const st=Math.sin(w), st2=Math.sin(w+Math.PI);
+      for(let s=-1;s<=1;s+=2){
+        for(let i=0;i<3;i++){
+          const ph=(i%2?st:st2), by=-r*.45+i*r*.55;
+          leg(s*r*.55,by, s*(r*1.25+ph*r*.18),by+r*.15, s*(r*1.15+ph*r*.4),by+r*.7, Math.max(1.6,r*.16), dark);
+        }
+      }
+      cx.fillStyle=fill;                     // abdomen
+      cx.beginPath(); cx.ellipse(0,r*.2,r*.82,r*1.0,0,0,TAU); cx.fill();
+      cx.fillStyle=body||shade(c,-.25);      // carapace seam plates
+      for(let i=0;i<3;i++){ cx.globalAlpha=.5;
+        cx.beginPath(); cx.ellipse(0,r*.0+i*r*.38,r*(.78-i*.13),r*.16,0,0,TAU); cx.fill(); }
+      cx.globalAlpha=1;
+      cx.fillStyle=body||lite;               // head plate
+      cx.beginPath(); cx.moveTo(0,-r*1.3); cx.lineTo(r*.62,-r*.5); cx.lineTo(0,-r*.2); cx.lineTo(-r*.62,-r*.5);
+      cx.closePath(); cx.fill();
+      leg(-r*.3,-r*1.15,-r*.55,-r*1.6,-r*.35,-r*1.85,1.5,dark);   // mandibles
+      leg( r*.3,-r*1.15, r*.55,-r*1.6, r*.35,-r*1.85,1.5,dark);
+      if(!hit) eyes(2,-r*.62,r*.46,r*.13,"#ffe08a","#ff9b3d");
       break;
+    }
+    case 1: { // skitter — long-limbed sprinter, four legs, whipping tail
+      const st=Math.sin(w*1.6), st2=Math.sin(w*1.6+Math.PI);
+      for(let s=-1;s<=1;s+=2){
+        leg(s*r*.35,-r*.3, s*(r*1.5+st*r*.5),-r*.9, s*(r*1.1+st*r*.7), r*.25, Math.max(1.4,r*.14), dark);
+        leg(s*r*.35, r*.3, s*(r*1.5+st2*r*.5), r*.4, s*(r*1.1+st2*r*.7), r*1.2, Math.max(1.4,r*.14), dark);
+      }
+      cx.strokeStyle=dark; cx.lineWidth=Math.max(1.4,r*.2); cx.lineCap="round";  // tail
+      cx.beginPath(); cx.moveTo(0,r*.7);
+      cx.quadraticCurveTo(Math.sin(w*1.6)*r*.9,r*1.4, Math.sin(w*1.6+1)*r*1.1,r*2.1); cx.stroke();
+      cx.fillStyle=fill;                     // thin thorax
+      cx.beginPath(); cx.ellipse(0,0,r*.52,r*1.05,0,0,TAU); cx.fill();
+      cx.fillStyle=body||lite;               // narrow head
+      cx.beginPath(); cx.moveTo(0,-r*1.55); cx.lineTo(r*.44,-r*.75); cx.lineTo(-r*.44,-r*.75);
+      cx.closePath(); cx.fill();
+      cx.strokeStyle=dark; cx.lineWidth=1.2;  // antennae
+      cx.beginPath(); cx.moveTo(-r*.2,-r*1.4); cx.lineTo(-r*.7,-r*2.1);
+      cx.moveTo(r*.2,-r*1.4); cx.lineTo(r*.7,-r*2.1); cx.stroke();
+      if(!hit) eyes(2,-r*1.05,r*.34,r*.11,"#c8ffe8","#35ff9e");
+      break;
+    }
+    case 2: { // drifter — hovering bell with trailing tendrils, translucent membrane
+      const pulse=1+Math.sin(G.t*2.2+e.bob)*.09;
+      cx.strokeStyle=tint(hit?"#ffffff":c,.45); cx.lineCap="round";
+      for(let i=0;i<7;i++){                   // tendrils drift behind
+        const off=(i-3)*r*.24, sw=Math.sin(G.t*2.4+i*.8+e.sd);
+        cx.lineWidth=Math.max(1,r*.1*(1-Math.abs(i-3)*.15));
+        cx.beginPath(); cx.moveTo(off*.7,r*.4);
+        cx.quadraticCurveTo(off+sw*r*.3,r*1.2, off*1.3+sw*r*.6,r*2.0); cx.stroke();
+      }
+      cx.save(); cx.scale(pulse,1/pulse);
+      const g=cx.createRadialGradient(-r*.3,-r*.5,r*.1,0,0,r*1.15);   // gelatinous bell
+      g.addColorStop(0,hit?"#ffffff":tint(shade(c,.5),.95));
+      g.addColorStop(.6,hit?"#ffffff":tint(c,.75));
+      g.addColorStop(1,hit?"#ffffff":tint(shade(c,-.4),.55));
+      cx.fillStyle=g;
+      cx.beginPath(); cx.ellipse(0,0,r*1.0,r*.92,0,Math.PI,TAU);       // dome
+      cx.bezierCurveTo(r*.9,r*.55,-r*.9,r*.55,-r*1.0,0); cx.fill();
+      cx.strokeStyle=tint(hit?"#ffffff":shade(c,.4),.6); cx.lineWidth=1.4;  // membrane ribs
+      for(let i=-2;i<=2;i++){ cx.beginPath();
+        cx.moveTo(i*r*.3,-r*.85+Math.abs(i)*r*.12); cx.lineTo(i*r*.38,r*.42); cx.stroke(); }
+      cx.restore();
+      if(!hit){ cx.fillStyle=tint("#ffffff",.75); cx.shadowColor=c; cx.shadowBlur=10;  // inner core
+        cx.beginPath(); cx.arc(0,-r*.1,r*.26,0,TAU); cx.fill(); cx.shadowBlur=0; }
+      break;
+    }
+    case 3: { // hulk — plated quadruped brute, shoulder armor, glowing core seam
+      const st=Math.sin(w*.7), st2=Math.sin(w*.7+Math.PI);
+      for(let s=-1;s<=1;s+=2){                // thick pistoning legs
+        leg(s*r*.6,-r*.25, s*(r*1.05+st*r*.12),-r*.1+st*r*.1, s*(r*.95), r*.6, Math.max(3,r*.26), dark);
+        leg(s*r*.6, r*.45, s*(r*1.05+st2*r*.12), r*.6+st2*r*.1, s*(r*.95), r*1.1, Math.max(3,r*.26), dark);
+      }
+      cx.fillStyle=fill;                      // torso block
+      cx.beginPath(); cx.roundRect(-r*.82,-r*.95,r*1.64,r*1.95,r*.3); cx.fill();
+      cx.fillStyle=body||shade(c,.28);        // shoulder pauldrons
+      for(let s=-1;s<=1;s+=2){ cx.beginPath();
+        cx.roundRect(s<0?-r*1.12:r*.32,-r*.85,r*.8,r*.85,r*.22); cx.fill(); }
+      cx.fillStyle=body||shade(c,-.62);       // plate gaps
+      cx.fillRect(-r*.8,-r*.12,r*1.6,r*.13); cx.fillRect(-r*.8,r*.42,r*1.6,r*.13);
+      if(!hit){                               // reactor seam down the chest
+        cx.shadowColor="#ff6b3d"; cx.shadowBlur=12; cx.fillStyle="#ffb46b";
+        cx.beginPath(); cx.roundRect(-r*.12,-r*.55,r*.24,r*1.1,r*.1); cx.fill(); cx.shadowBlur=0;
+      }
+      cx.fillStyle=body||lite;                // sunken head
+      cx.beginPath(); cx.roundRect(-r*.42,-r*1.35,r*.84,r*.55,r*.18); cx.fill();
+      if(!hit) eyes(3,-r*1.08,r*.28,r*.09,"#ff9b6b","#ff4757");
+      break;
+    }
+    case 4: { // spitter — bloated acid sac, visible fluid level, charging muzzle
+      const charge=clamp(1-e.at/2.4,0,1), squish=1+Math.sin(G.t*1.8+e.bob)*.06;
+      cx.strokeStyle=dark; cx.lineCap="round";  // stubby dangling legs
+      for(let i=0;i<4;i++){ const a=Math.PI*.25+i*Math.PI*.5, sw=Math.sin(G.t*2+i+e.sd)*.25;
+        cx.lineWidth=Math.max(1.4,r*.13);
+        cx.beginPath(); cx.moveTo(Math.cos(a)*r*.5,Math.sin(a)*r*.5+r*.2);
+        cx.lineTo(Math.cos(a+sw)*r*1.0,Math.sin(a+sw)*r*.9+r*.75); cx.stroke(); }
+      cx.save(); cx.scale(1/squish,squish);
+      cx.fillStyle=fill;                        // sac
+      cx.beginPath(); cx.ellipse(0,r*.12,r*.92,r*.98,0,0,TAU); cx.fill();
+      if(!hit){                                 // acid pooled in the bottom of the sac
+        cx.save(); cx.beginPath(); cx.ellipse(0,r*.12,r*.86,r*.92,0,0,TAU); cx.clip();
+        cx.fillStyle=tint(shade(c,.45),.55+charge*.35);
+        cx.fillRect(-r,r*.12+r*.5-charge*r*1.1,r*2,r*2); cx.restore();
+      }
+      cx.strokeStyle=body||shade(c,-.5); cx.lineWidth=1.3;   // sac veins
+      for(let i=0;i<4;i++){ const a=-1.1+i*.75;
+        cx.beginPath(); cx.moveTo(Math.cos(a)*r*.15,Math.sin(a)*r*.15+r*.1);
+        cx.quadraticCurveTo(Math.cos(a)*r*.7,Math.sin(a)*r*.7+r*.1,Math.cos(a)*r*.88,Math.sin(a)*r*.9+r*.1);
+        cx.stroke(); }
+      cx.restore();
+      cx.fillStyle=body||shade(c,-.3);          // muzzle
+      cx.beginPath(); cx.moveTo(-r*.3,-r*.7); cx.lineTo(r*.3,-r*.7);
+      cx.lineTo(r*.16,-r*1.3); cx.lineTo(-r*.16,-r*1.3); cx.closePath(); cx.fill();
+      if(!hit && charge>.55){                   // muzzle glows as the shot charges
+        cx.shadowColor="#ffd166"; cx.shadowBlur=6+charge*12; cx.fillStyle="#fff3c4";
+        cx.beginPath(); cx.arc(0,-r*1.3,r*.16*charge,0,TAU); cx.fill(); cx.shadowBlur=0;
+      }
+      if(!hit) eyes(2,-r*.5,r*.4,r*.1,"#fff3c4","#ffd166");
+      break;
+    }
   }
   cx.shadowBlur=0;
   cx.restore();
   if(e.hp<e.max && e.max>25){
-    const w=e.r*2, h=2.5;
-    cx.fillStyle="rgba(0,0,0,.6)"; cx.fillRect(e.x-w/2,e.y-e.r-8,w,h);
-    cx.fillStyle="#ff4757"; cx.fillRect(e.x-w/2,e.y-e.r-8,w*Math.max(0,e.hp/e.max),h);
+    const bw=e.r*2, bh=2.5;
+    cx.fillStyle="rgba(0,0,0,.6)"; cx.fillRect(e.x-bw/2,e.y-e.r-8-lift,bw,bh);
+    cx.fillStyle="#ff4757"; cx.fillRect(e.x-bw/2,e.y-e.r-8-lift,bw*Math.max(0,e.hp/e.max),bh);
   }
   if(e.target==="base"){
     cx.strokeStyle="rgba(255,71,87,.30)"; cx.lineWidth=1;
     cx.beginPath(); cx.arc(e.x,e.y,e.r+4,0,TAU); cx.stroke();
   }
 }
-
 function drawBoss(b){
   const hit=b.hit>0, r=b.r;
   cx.save(); cx.translate(b.x,b.y);

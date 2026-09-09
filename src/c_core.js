@@ -77,6 +77,7 @@ function mkEnemy(type,pos,mult){
   G.E.push({x:P.x,y:P.y,r:d.r,type:type,c:d.c,shape:d.shape,ranged:!!d.ranged,
     hp:d.hp*s, max:d.hp*s, spd:d.spd*(1+Math.min(.45,G.t/1400))*rnd(.9,1.1),
     dmg:d.dmg*(1+G.t/900), xp:d.xp, kx:0,ky:0, hit:0, at:rnd(0,2), burn:0, a:rnd(0,TAU),
+    sd:rnd(0,TAU), walk:rnd(0,TAU), bob:rnd(0,TAU),
     target:toBase?"base":"player", boss:false});
 }
 function spawnWave(dt){

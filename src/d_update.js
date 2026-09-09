@@ -107,6 +107,7 @@ function update(dt){
         }
       }
     }
+    e.walk += dt*e.spd*0.075;
     e.x += (Math.cos(a)*e.spd + e.kx)*dt;
     e.y += (Math.sin(a)*e.spd + e.ky)*dt;
     e.kx*=Math.pow(0.001,dt); e.ky*=Math.pow(0.001,dt);
