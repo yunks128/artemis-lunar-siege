@@ -6,6 +6,10 @@ addEventListener("keydown",e=>{
   KEY[k]=true;
   if(k==="escape"||k==="p"){ if(RUNNING&&!G.end&&MODE==="play") togglePause(); }
   if(MODE==="levelup" && (k==="1"||k==="2"||k==="3")) chooseCard(+k-1);
+  if(MODE==="quiz"){
+    if(!QZ.done && (k==="1"||k==="2"||k==="3")){ const n=QZ.order[+k-1]; if(n!==undefined) answerQuiz(n); }
+    else if(QZ.done && (k==="enter"||k===" ")) closeQuiz();
+  }
   if(["arrowup","arrowdown","arrowleft","arrowright"," "].includes(k)) e.preventDefault();
 },{passive:false});
 addEventListener("keyup",e=>{KEY[e.key.toLowerCase()]=false});
@@ -260,7 +264,7 @@ function update(dt){
     o.x+=o.vx*dt; o.y+=o.vy*dt; o.vx*=Math.pow(.2,dt); o.vy*=Math.pow(.2,dt);
     if(d<p.r+9){
       o.dead=true;
-      if(o.heal){ p.hp=Math.min(p.max,p.hp+22); beep(880,0.14,"sine",0.04,1300); }
+      if(o.heal){ p.hp=Math.min(p.max,p.hp+34); beep(880,0.14,"sine",0.04,1300); }
       else { gainXP(o.v); }
     }
   }

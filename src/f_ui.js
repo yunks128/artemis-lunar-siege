@@ -1,11 +1,11 @@
 /* ---------------- DOM helpers ---------------- */
 const $ = id => document.getElementById(id);
-const LAYERS = ["menu","manual","levelup","pause","over"];
+const LAYERS = ["menu","manual","levelup","quiz","pause","over"];
 function show(id){
   LAYERS.forEach(l=>$(l).classList.toggle("on", l===id));
-  $("hud").classList.toggle("on", id===null || id==="levelup" || id==="pause");
-  $("lang").classList.toggle("hidden", id===null || id==="levelup");
-  $("foot").classList.toggle("hidden", id===null || id==="levelup" || id==="pause");
+  $("hud").classList.toggle("on", id===null || id==="levelup" || id==="quiz" || id==="pause");
+  $("lang").classList.toggle("hidden", id===null || id==="levelup" || id==="quiz");
+  $("foot").classList.toggle("hidden", id===null || id==="levelup" || id==="quiz" || id==="pause");
 }
 function fmt(s){ s=Math.max(0,Math.floor(s)); return String(Math.floor(s/60)).padStart(2,"0")+":"+String(s%60).padStart(2,"0"); }
 
@@ -15,6 +15,7 @@ function applyLang(){
   document.querySelectorAll("[data-i]").forEach(el=>{ el.innerHTML = t(el.dataset.i); });
   $("man-ctl").innerHTML = t("man_ctl").map(x=>"<li>"+x+"</li>").join("");
   $("man-tip").innerHTML = t("man_tip").map(x=>"<li>"+x+"</li>").join("");
+  $("man-lore").innerHTML = t("man_lore").map(x=>"<li>"+x+"</li>").join("");
   $("man-wep").innerHTML = Object.keys(WEAPONS).map(k=>{
     const w=WEAPONS[k];
     return "<div class='wk'><div class='g'>"+w.g+"</div><div><div class='t'>"+t(w.n)+"</div><div class='d'>"+t(w.d)+"</div></div></div>";
@@ -24,6 +25,7 @@ function applyLang(){
     : "ARTEMIS: LUNAR SIEGE · 오리지널 작품 · MIT 라이선스";
   document.querySelectorAll("#lang button").forEach(b=>b.classList.toggle("sel", b.dataset.l===LANG));
   if(MODE==="levelup") renderCards();
+  if(MODE==="quiz" && QZ){ renderQuiz(); if(QZ.done) replayQuizAnswer(); }
   if(MODE==="over") renderOver();
   if(RUNNING) syncHUD();
 }
@@ -110,6 +112,7 @@ function renderCards(){
 }
 function openLevelUp(){
   MODE="levelup"; PAUSED=true; SFX.lv();
+  if(quizDue()){ openQuiz(); return; }
   CARDS=buildCards(); renderCards(); show("levelup");
 }
 function chooseCard(i){
@@ -119,15 +122,77 @@ function chooseCard(i){
   else if(c.k==="wup"){ G.weapons[c.id].lv++; }
   else if(c.k==="wnew"){ addWeapon(c.id); }
   else if(c.k==="pup"){ G.passives[c.id]++; }
-  else if(c.k==="pnew"){ G.passives[c.id]=1; if(c.id==="core") G.p.hp+=18; }
-  else if(c.k==="srep"){ G.p.hp=Math.min(G.p.max,G.p.hp+45); }
-  else if(c.k==="sbase"){ G.base.hp=Math.min(G.base.max,G.base.hp+20); }
-  if(c.k==="pup"&&c.id==="core") G.p.hp+=18;
+  else if(c.k==="pnew"){ G.passives[c.id]=1; if(c.id==="core") G.p.hp+=30; }
+  else if(c.k==="srep"){ G.p.hp=Math.min(G.p.max,G.p.hp+70); }
+  else if(c.k==="sbase"){ G.base.hp=Math.min(G.base.max,G.base.hp+G.base.max*0.25); }
+  if(c.k==="pup"&&c.id==="core") G.p.hp+=30;
   recalc();
   beep(660,0.1,"triangle",0.04,880);
   G.pendingLv--;
   if(G.pendingLv>0){ CARDS=buildCards(); renderCards(); return; }
   MODE="play"; PAUSED=false; show(null); syncHUD();
+}
+
+/* ---------------- Artemis dossier quiz ----------------
+   Sometimes a level-up opens with a question instead. Answer it right and the
+   uplink grants a second module pick on top of the level you already earned. */
+let QZ=null;
+function quizDue(){
+  return G.p.lv>=3 && G.quizPool.length>0 && Math.random()<0.5;
+}
+function openQuiz(){
+  MODE="quiz"; PAUSED=true;
+  QZ={ i:G.quizPool.pop(), done:false };
+  QZ.order=shuffle(QUIZ[QZ.i].a.map((_,n)=>n));
+  renderQuiz(); show("quiz");
+  beep(880,0.09,"triangle",0.04,1180);
+}
+function renderQuiz(){
+  const q=QUIZ[QZ.i];
+  $("qz-h").textContent=t("qz_head");
+  $("qz-s").textContent=t("qz_sub");
+  $("qz-q").textContent=q.q[LANG];
+  $("qz-a").innerHTML=QZ.order.map((n,i)=>
+    "<button class='qa' data-n='"+n+"'><span class='qk'>"+(i+1)+"</span>"+q.a[n][LANG]+"</button>").join("");
+  $("qz-a").querySelectorAll(".qa").forEach(el=>{ el.onclick=()=>answerQuiz(+el.dataset.n); });
+  $("qz-f").className="qz-f";
+  $("qz-f").innerHTML="";
+  $("qz-next").classList.add("hidden");
+  $("qz-next").textContent=t("qz_next");
+}
+function answerQuiz(n){
+  if(MODE!=="quiz"||!QZ||QZ.done) return;
+  const q=QUIZ[QZ.i], ok=(n===q.c);
+  QZ.done=true; QZ.ok=ok; QZ.pick=n;
+  $("qz-a").querySelectorAll(".qa").forEach(el=>{
+    const v=+el.dataset.n;
+    el.classList.add(v===q.c?"ok":(v===n?"no":"mute"));
+    el.onclick=null;
+  });
+  if(ok){ G.quizRight++; G.pendingLv++; SFX.lv(); }
+  else { G.quizWrong++; beep(170,0.24,"sawtooth",0.045,80); }
+  $("qz-f").className="qz-f on "+(ok?"ok":"no");
+  $("qz-f").innerHTML="<div class='v'>"+t(ok?"qz_ok":"qz_no")+"</div>"+
+                      "<div class='x'>"+q.f[LANG]+"</div>";
+  $("qz-next").classList.remove("hidden");
+}
+function replayQuizAnswer(){
+  // language switched mid-question: rebuild the answered state without re-scoring
+  const q=QUIZ[QZ.i];
+  $("qz-a").querySelectorAll(".qa").forEach(el=>{
+    const v=+el.dataset.n;
+    el.classList.add(v===q.c?"ok":(v===QZ.pick?"no":"mute"));
+    el.onclick=null;
+  });
+  $("qz-f").className="qz-f on "+(QZ.ok?"ok":"no");
+  $("qz-f").innerHTML="<div class='v'>"+t(QZ.ok?"qz_ok":"qz_no")+"</div>"+
+                      "<div class='x'>"+q.f[LANG]+"</div>";
+  $("qz-next").classList.remove("hidden");
+}
+function closeQuiz(){
+  if(MODE!=="quiz"||!QZ||!QZ.done) return;
+  QZ=null;
+  MODE="levelup"; CARDS=buildCards(); renderCards(); show("levelup");
 }
 
 /* ---------------- flow ---------------- */
@@ -156,6 +221,8 @@ function renderOver(){
   $("r-kills").textContent = G.kills;
   $("r-level").textContent = G.p.lv;
   $("r-base").textContent = Math.max(0,Math.ceil(G.base.hp/G.base.max*100))+"%";
+  const asked=G.quizRight+G.quizWrong;
+  $("r-quiz").textContent = asked ? G.quizRight+"/"+asked : "—";
 }
 
 $("btn-start").onclick = startGame;
@@ -164,6 +231,7 @@ $("btn-manual").onclick = ()=>{ MODE="manual"; show("manual"); };
 $("btn-manual-back").onclick = ()=>{ MODE="menu"; show("menu"); };
 $("btn-resume").onclick = togglePause;
 $("btn-quit").onclick = ()=>{ RUNNING=false; MODE="menu"; show("menu"); };
+$("qz-next").onclick = closeQuiz;
 $("btn-menu").onclick = ()=>{ MODE="menu"; show("menu"); };
 $("pausebtn").onclick = togglePause;
 document.addEventListener("visibilitychange",()=>{ if(document.hidden && MODE==="play") togglePause(); });

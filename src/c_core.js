@@ -26,6 +26,7 @@ function newGame(){
     weapons:{}, passives:{},
     E:[], B:[], EB:[], orbs:[], mines:[], fx:[], beams:[], shocks:[],
     drones:0, droneA:0,
+    quizPool:shuffle(QUIZ.map((_,i)=>i)), quizRight:0, quizWrong:0,
     boss:null, harvDone:false, monarchDone:false, monSpawned:false,
     phase:"", phaseT:0, banner:"", bannerT:0, end:null
   };
@@ -37,14 +38,14 @@ function addWeapon(id){ G.weapons[id]={lv:1,t:0,leg:false}; }
 function recalc(){
   const p=G.p, pa=G.passives;
   const L=k=>pa[k]||0;
-  p.spd = 184*(1+0.12*L("boots"));
-  p.max = 130 + 20*L("core");
-  p.mag = 88*(1+0.32*L("mag"));
-  p.cd  = Math.max(0.42, 1-0.09*L("cool"));
-  p.dmg = 1+0.14*L("amp");
-  p.armor = Math.min(0.5, 0.09*L("plate"));
-  p.area = 1+0.15*L("opt");
-  p.regen = 0.6*L("nano");
+  p.spd = 184*(1+0.17*L("boots"));
+  p.max = 130 + 30*L("core");
+  p.mag = 88*(1+0.46*L("mag"));
+  p.cd  = Math.max(0.32, 1-0.13*L("cool"));
+  p.dmg = 1+0.21*L("amp");
+  p.armor = Math.min(0.6, 0.13*L("plate"));
+  p.area = 1+0.21*L("opt");
+  p.regen = 1.2*L("nano");
   if(p.hp>p.max) p.hp=p.max;
 }
 
@@ -52,16 +53,16 @@ function recalc(){
 function wstat(id){
   const w=G.weapons[id], lv=w.lv, p=G.p, leg=w.leg;
   switch(id){
-    case "rifle": return {cd:Math.max(.14,(.62-.035*lv)*p.cd*(leg?.8:1)), dmg:(9+3*lv)*(leg?2.6:1)*p.dmg,
-      n:1+Math.floor(lv/3)+(leg?1:0), pierce:leg?99:Math.floor(lv/4), sp:560+18*lv, rad:(leg?7:5)*p.area};
-    case "drone": return {count:Math.min(7,1+Math.floor((lv+1)/2)+(leg?2:0)), dmg:(6+2.2*lv)*(leg?2.2:1)*p.dmg,
-      rad:(62+5.5*lv)*p.area, rot:(2.1+.07*lv)*(leg?1.35:1), size:(9+.7*lv)*p.area, burn:leg};
-    case "mine":  return {cd:Math.max(.5,(2.0-.12*lv)*p.cd), dmg:(18+7*lv)*(leg?1.9:1)*p.dmg,
-      rad:(50+4.5*lv)*p.area, chain:leg};
-    case "lance": return {cd:Math.max(.7,(2.6-.16*lv)*p.cd), dmg:(22+9*lv)*p.dmg,
-      w:(13+2*lv)*p.area, len:(400+22*lv)*p.area, beams:leg?4:(lv>=6?2:1), spin:leg};
-    case "nova":  return {cd:Math.max(1.0,(3.4-.18*lv)*p.cd), dmg:(14+6*lv)*(leg?1.8:1)*p.dmg,
-      rad:(102+14*lv)*p.area, pull:leg};
+    case "rifle": return {cd:Math.max(.11,(.56-.045*lv)*p.cd*(leg?.75:1)), dmg:(13+4.8*lv)*(leg?2.8:1)*p.dmg,
+      n:1+Math.floor(lv/2)+(leg?2:0), pierce:leg?99:Math.floor(lv/3), sp:600+20*lv, rad:(leg?8:6)*p.area};
+    case "drone": return {count:Math.min(9,2+Math.floor((lv+1)/2)+(leg?2:0)), dmg:(9+3.4*lv)*(leg?2.4:1)*p.dmg,
+      rad:(68+6.5*lv)*p.area, rot:(2.4+.09*lv)*(leg?1.4:1), size:(10+.9*lv)*p.area, burn:leg};
+    case "mine":  return {cd:Math.max(.40,(1.75-.15*lv)*p.cd), dmg:(26+11*lv)*(leg?2.0:1)*p.dmg,
+      rad:(58+6*lv)*p.area, chain:leg};
+    case "lance": return {cd:Math.max(.55,(2.25-.19*lv)*p.cd), dmg:(32+14*lv)*p.dmg,
+      w:(15+2.6*lv)*p.area, len:(450+28*lv)*p.area, beams:leg?4:(lv>=5?2:1), spin:leg};
+    case "nova":  return {cd:Math.max(.80,(2.9-.21*lv)*p.cd), dmg:(20+9.5*lv)*(leg?1.9:1)*p.dmg,
+      rad:(115+18*lv)*p.area, pull:leg};
   }
 }
 
