@@ -1,6 +1,6 @@
 /* ---------------- DOM helpers ---------------- */
 const $ = id => document.getElementById(id);
-const LAYERS = ["menu","manual","levelup","quiz","pause","over"];
+const LAYERS = ["menu","manual","levelup","quiz","pause","over","ranks"];
 function show(id){
   LAYERS.forEach(l=>$(l).classList.toggle("on", l===id));
   $("hud").classList.toggle("on", id===null || id==="levelup" || id==="quiz" || id==="pause");
@@ -27,6 +27,7 @@ function applyLang(){
   if(MODE==="levelup") renderCards();
   if(MODE==="quiz" && QZ){ renderQuiz(); if(QZ.done) replayQuizAnswer(); }
   if(MODE==="over") renderOver();
+  if(MODE==="ranks") renderRanks();
   if(RUNNING) syncHUD();
 }
 document.querySelectorAll("#lang button").forEach(b=>{
@@ -210,6 +211,9 @@ function finish(kind){
   if(G.end) return;
   G.end=kind; RUNNING=false; PAUSED=true; MODE="over";
   if(kind==="win") SFX.win(); else SFX.lose();
+  RANK_SAVED=false; RANK_NEW=null;
+  $("rk-row").classList.remove("hidden"); $("rk-note").classList.add("hidden");
+  $("rk-name").value = lastName();
   renderOver(); show("over");
 }
 function renderOver(){
@@ -223,6 +227,9 @@ function renderOver(){
   $("r-base").textContent = Math.max(0,Math.ceil(G.base.hp/G.base.max*100))+"%";
   const asked=G.quizRight+G.quizWrong;
   $("r-quiz").textContent = asked ? G.quizRight+"/"+asked : "—";
+  $("r-score").textContent = scoreRun().toLocaleString();
+  $("rk-save").textContent = t("rk_save");
+  $("rk-name").placeholder = t("rk_ph");
 }
 
 $("btn-start").onclick = startGame;
@@ -232,9 +239,97 @@ $("btn-manual-back").onclick = ()=>{ MODE="menu"; show("menu"); };
 $("btn-resume").onclick = togglePause;
 $("btn-quit").onclick = ()=>{ RUNNING=false; MODE="menu"; show("menu"); };
 $("qz-next").onclick = closeQuiz;
+$("rk-save").onclick = submitScore;
+$("rk-name").onkeydown = e=>{ if(e.key==="Enter"){ e.preventDefault(); submitScore(); } };
+$("btn-ranks").onclick = ()=>openRanks("menu");
+$("btn-ranks-over").onclick = ()=>openRanks("over");
+$("rk-back").onclick = closeRanks;
+$("rk-clear").onclick = clearRanks;
 $("btn-menu").onclick = ()=>{ MODE="menu"; show("menu"); };
 $("pausebtn").onclick = togglePause;
 document.addEventListener("visibilitychange",()=>{ if(document.hidden && MODE==="play") togglePause(); });
+
+/* ---------------- rankings ----------------
+   Scores live in this browser's localStorage — there is no server behind the
+   static site, so a board is per-device. Every read/write is guarded: private
+   windows and blocked site data make localStorage throw rather than return null. */
+const RANK_KEY="artemis.scores.v2", RANK_NAME_KEY="artemis.lastname", RANK_MAX=25;
+function scoreRun(){
+  const secs=Math.min(G.t,RUN_TIME), win=G.end==="win";
+  return Math.round(
+      secs*10                                   // time held
+    + G.kills*5                                 // hostiles cleared
+    + G.p.lv*25                                 // uplink level
+    + Math.max(0,G.base.hp/G.base.max)*100*10   // base left standing
+    + G.quizRight*50                            // dossier answers
+    + (win?3000:0));                            // mission complete
+}
+function loadRanks(){
+  try{
+    const raw=localStorage.getItem(RANK_KEY);
+    const a=raw?JSON.parse(raw):[];
+    return Array.isArray(a)?a.filter(x=>x&&typeof x.score==="number"):[];
+  }catch(e){ return []; }
+}
+function saveRanks(a){
+  try{ localStorage.setItem(RANK_KEY,JSON.stringify(a.slice(0,RANK_MAX))); return true; }
+  catch(e){ return false; }
+}
+function lastName(){ try{ return localStorage.getItem(RANK_NAME_KEY)||""; }catch(e){ return ""; } }
+function submitScore(){
+  if(RANK_SAVED) return;
+  const el=$("rk-name");
+  const nm=(el.value||"").trim().slice(0,14) || t("rk_anon");
+  try{ localStorage.setItem(RANK_NAME_KEY,nm); }catch(e){}
+  const entry={ name:nm, score:scoreRun(), t:Math.round(Math.min(G.t,RUN_TIME)), kills:G.kills,
+                lv:G.p.lv, base:Math.max(0,Math.round(G.base.hp/G.base.max*100)),
+                quiz:G.quizRight, win:G.end==="win", at:Date.now(), id:Math.random().toString(36).slice(2) };
+  const all=loadRanks().concat([entry]).sort((a,b)=>b.score-a.score);
+  const stored=saveRanks(all);
+  RANK_SAVED=true; RANK_NEW=entry.id;
+  $("rk-row").classList.add("hidden");
+  $("rk-note").textContent = stored ? t("rk_saved",{n:entry.name}) : t("rk_nostore");
+  $("rk-note").classList.remove("hidden");
+  beep(760,0.12,"triangle",0.05,1020);
+  openRanks("over");
+}
+let RANK_SAVED=false, RANK_NEW=null, RANK_BACK="menu";
+function openRanks(from){
+  RANK_BACK=from||"menu"; MODE="ranks";
+  renderRanks(); show("ranks");
+}
+function renderRanks(){
+  $("rk-h").textContent=t("rk_title");
+  $("rk-back").textContent=t("btn_back");
+  const all=loadRanks();
+  $("rk-clear").classList.toggle("hidden", all.length===0);
+  $("rk-clear").textContent=t("rk_clear");
+  if(!all.length){ $("rk-list").innerHTML="<div class='rk-empty'>"+t("rk_empty")+"</div>"; return; }
+  $("rk-list").innerHTML =
+    "<div class='rk-r rk-head'><span class='p'>#</span><span class='n'>"+t("rk_name")+"</span>"+
+      "<span class='c'>"+t("rk_time")+"</span><span class='c'>"+t("rk_kills")+"</span>"+
+      "<span class='c'>"+t("rk_lv")+"</span><span class='c'>"+t("rk_quiz")+"</span>"+
+      "<span class='s'>"+t("rk_score")+"</span></div>" +
+    all.map((e,i)=>
+      "<div class='rk-r"+(e.id===RANK_NEW?" me":"")+(e.win?" win":"")+"'>"+
+        "<span class='p'>"+(i+1)+"</span>"+
+        "<span class='n'>"+esc(e.name)+(e.win?"<b class='wtag'>"+t("rk_held")+"</b>":"")+"</span>"+
+        "<span class='c'>"+fmt(e.t)+"</span><span class='c'>"+e.kills+"</span>"+
+        "<span class='c'>"+e.lv+"</span><span class='c'>"+(e.quiz||0)+"</span>"+
+        "<span class='s'>"+e.score.toLocaleString()+"</span></div>").join("");
+}
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function clearRanks(){
+  if(!$("rk-clear").classList.contains("armed")){
+    $("rk-clear").classList.add("armed"); $("rk-clear").textContent=t("rk_sure"); return;
+  }
+  try{ localStorage.removeItem(RANK_KEY); }catch(e){}
+  RANK_NEW=null; $("rk-clear").classList.remove("armed"); renderRanks();
+}
+function closeRanks(){
+  if(RANK_BACK==="over"){ MODE="over"; show("over"); }
+  else { MODE="menu"; show("menu"); }
+}
 
 /* ---------------- loop ---------------- */
 let last=performance.now(), hudT=0;
